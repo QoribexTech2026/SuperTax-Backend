@@ -4,10 +4,13 @@ Validación de access tokens de Auth0 (RS256 vía JWKS, con caché).
 Auth0 es el único proveedor de identidad de la plataforma. Se valida firma,
 audience e issuer contra el JWKS del tenant. El JWKS se cachea 1 hora.
 """
+import json
 import time
 
 import httpx
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
+from jwt.algorithms import RSAAlgorithm
 
 from src.platform.config.settings import settings
 
@@ -40,7 +43,7 @@ def validar_token(token: str) -> dict:
 
     try:
         header = jwt.get_unverified_header(token)
-    except JWTError as e:
+    except PyJWTError as e:
         raise Auth0Error(f"Token malformado: {e}")
 
     jwks = _obtener_jwks()
@@ -53,14 +56,15 @@ def validar_token(token: str) -> dict:
             raise Auth0Error("Clave de firma desconocida")
 
     try:
+        public_key = RSAAlgorithm.from_jwk(json.dumps(key))
         return jwt.decode(
             token,
-            key,
+            public_key,
             algorithms=["RS256"],
             audience=settings.AUTH0_AUDIENCE,
             issuer=_issuer(),
         )
-    except JWTError as e:
+    except PyJWTError as e:
         raise Auth0Error(f"Token inválido: {e}")
 
 
