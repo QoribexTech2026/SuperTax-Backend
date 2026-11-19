@@ -26,3 +26,8 @@ env/
 # IDE
 .idea/
 .vscode/
+
+# Scripts locales con datos sensibles (no versionar)
+scripts/
+# Guia local de Claude Code (no versionar)
+CLAUDE.md
