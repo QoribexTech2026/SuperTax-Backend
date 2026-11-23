@@ -281,6 +281,7 @@ def generate_excel(
     propuesta_generada: datetime | None = None,
     cobertura: str | None = None,
     sin_sire: bool = False,
+    incluir_dashboard: bool = True,
     meses_no_disponibles: list[str] | None = None,
     diferencias_tc: list | None = None,
     duplicados_periodo: list | None = None,
@@ -785,9 +786,11 @@ def generate_excel(
     _finish_sheet(ws_d, n_cols_d, num_cols=num_cols_d if use_fmt_d else None)
 
     # Boletas (solo ventas): hoja de detalle serie×día + dashboard interactivo.
+    # El dashboard es opcional (el usuario lo decide al cargar).
     if not es_compras and output.boletas_agregadas:
         _agregar_hoja_boletas(wb, output.boletas_agregadas)
-        agregar_hoja_dashboard(wb, output.boletas_agregadas)
+        if incluir_dashboard:
+            agregar_hoja_dashboard(wb, output.boletas_agregadas)
 
     # Observaciones (solo ventas): correlatividad de NC y duplicados.
     if not es_compras and (output.correlatividad or output.duplicados):

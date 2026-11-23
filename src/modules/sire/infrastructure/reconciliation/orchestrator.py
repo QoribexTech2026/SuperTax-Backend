@@ -285,6 +285,7 @@ class _JobSnapshot:
     tipo_libro: TipoLibro
     sin_sire: bool
     reutilizar: bool
+    incluir_dashboard: bool
     mapeo_config: dict | None
     saved_mapping: dict | None
     cobertura_fechas: list | None
@@ -329,6 +330,7 @@ async def procesar_job(db: Session, job_id: int) -> None:
         tipo_libro=tipo_libro,
         sin_sire=bool(job.sin_sire) and tipo_libro == TipoLibro.compras,
         reutilizar=bool(job.reutilizar_propuesta),
+        incluir_dashboard=bool(job.incluir_dashboard),
         mapeo_config=job.mapeo_config,
         saved_mapping=(
             SqlFileMappingRepository(db).get_config(job.company_id, tipo_libro.value)
@@ -468,6 +470,7 @@ async def procesar_job(db: Session, job_id: int) -> None:
             "cobertura_fechas": snap.cobertura_fechas,
             "cobertura_desc": _descripcion_cobertura(snap.cobertura_fechas),
             "sin_sire": snap.sin_sire,
+            "incluir_dashboard": snap.incluir_dashboard,
             "sunat_extra_paths": sunat_extra_paths,
             "sunat_extra_fallidos": meses_no_disponibles,
             "ruc": snap.ruc,

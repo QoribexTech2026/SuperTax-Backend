@@ -268,6 +268,7 @@ def procesar_conciliacion(payload: dict) -> dict:
         propuesta_generada=payload["propuesta_origen_at"],
         cobertura=payload["cobertura_desc"],
         sin_sire=bool(payload.get("sin_sire")),
+        incluir_dashboard=bool(payload.get("incluir_dashboard", True)),
         meses_no_disponibles=payload.get("sunat_extra_fallidos"),
         diferencias_tc=diferencias_tc,
         duplicados_periodo=duplicados_periodo,

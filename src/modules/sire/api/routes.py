@@ -112,6 +112,7 @@ async def create_job(
     cobertura_fechas: str | None = Form(None, description="JSON de fechas (solo ventas)"),
     sin_sire: bool = Form(False, description="Solo compras: empresa no afiliada al SIRE"),
     reutilizar_propuesta: bool = Form(False, description="Reutilizar propuesta fresca si existe"),
+    incluir_dashboard: bool = Form(True, description="Incluir la hoja Dashboard (solo ventas con boletas)"),
     archivos_mes_anterior: list[UploadFile] = File(
         default=[],
         description="PLE de meses previos (opcional, ventas): duplicidad/correlatividad",
@@ -150,6 +151,7 @@ async def create_job(
             mapeo_config=mapeo_config,
             cobertura_fechas=cobertura,
             reutilizar_propuesta=reutilizar_propuesta,
+            incluir_dashboard=incluir_dashboard,
             prev_files=prev_files,
         )
     except ValueError as exc:

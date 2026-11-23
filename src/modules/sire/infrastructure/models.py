@@ -54,6 +54,8 @@ class ReconciliationJobModel(Base):
     sin_sire: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Reutilizar una propuesta SUNAT fresca de otro job en vez de solicitar una nueva.
     reutilizar_propuesta: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Incluir la hoja «Dashboard» en el reporte (solo ventas con boletas).
+    incluir_dashboard: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Mapeo de columnas usado por ESTE job (para reanudar con el mismo parseo).
     mapeo_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Compras "sin SIRE": tickets SUNAT de propuestas de meses anteriores que

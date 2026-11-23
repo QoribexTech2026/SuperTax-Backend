@@ -58,6 +58,7 @@ class SqlReconciliationRepository:
         mapeo_config: dict | None = None,
         cobertura_fechas: list | None = None,
         reutilizar_propuesta: bool = False,
+        incluir_dashboard: bool = True,
         empresa_prev_file_paths: list[str] | None = None,
     ) -> ReconciliationJob:
         row = ReconciliationJobModel(
@@ -72,6 +73,7 @@ class SqlReconciliationRepository:
             mapeo_config=mapeo_config,
             cobertura_fechas=cobertura_fechas,
             reutilizar_propuesta=reutilizar_propuesta,
+            incluir_dashboard=incluir_dashboard,
             empresa_prev_file_paths=empresa_prev_file_paths or None,
         )
         self._db.add(row)

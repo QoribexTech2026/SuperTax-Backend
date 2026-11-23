@@ -49,6 +49,7 @@ def create_reconciliation_job(
     mapeo_config: dict | None = None,
     cobertura_fechas: list | None = None,
     reutilizar_propuesta: bool = False,
+    incluir_dashboard: bool = True,
     prev_files: list[tuple[str | None, bytes]] | None = None,
 ) -> ReconciliationJob:
     """
@@ -98,5 +99,6 @@ def create_reconciliation_job(
         mapeo_config=mapeo_config,
         cobertura_fechas=cobertura_fechas,
         reutilizar_propuesta=reutilizar_propuesta,
+        incluir_dashboard=incluir_dashboard,
         empresa_prev_file_paths=prev_paths,
     )

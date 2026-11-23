@@ -373,3 +373,15 @@ def test_comprobante_normal_distinto_ruc_no_coincide():
     out = reconcile(emp, sun, "compras", None, periodo="202601")
     assert len(out.scenario_a) == 1 and len(out.scenario_b) == 1
     assert out.scenario_d == []
+
+
+def test_dashboard_opcional_se_omite_con_incluir_dashboard_false():
+    out = reconcile([_emp("B001", 10, base=55.0, importe=65.0)],
+                    [_sun("B001", 10, base=55.0, importe=65.0)], "ventas", None, periodo="202605")
+    assert out.boletas_agregadas  # hay boletas → el dashboard aplica
+    args = dict(output=out, empresa_nombre="X", ruc="20600657888", periodo="202605",
+                tipo_libro="ventas", propuesta_generada=datetime.now(timezone.utc))
+    con = load_workbook(BytesIO(generate_excel(**args)))
+    sin = load_workbook(BytesIO(generate_excel(**args, incluir_dashboard=False)))
+    assert "Dashboard" in con.sheetnames
+    assert "Dashboard" not in sin.sheetnames
