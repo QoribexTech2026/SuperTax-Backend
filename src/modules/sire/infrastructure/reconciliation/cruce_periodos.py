@@ -15,8 +15,8 @@ from dataclasses import dataclass
 
 from src.modules.sire.infrastructure.reconciliation.ple_ventas import FilaPLE
 
-# Correlatividad: boletas (03) y notas de crédito (07), igual que el motor.
-_TIPOS_CORRELATIVIDAD = {"03", "07"}
+# Correlatividad: facturas (01), boletas (03) y notas de crédito (07), igual que el motor.
+_TIPOS_CORRELATIVIDAD = {"01", "03", "07"}
 
 # Boletas (03) se excluyen de la duplicidad cruzada: son ventas a "clientes varios"
 # de alto volumen y su colisión de numeración entre meses es ruido, no un error.

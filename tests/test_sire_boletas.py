@@ -236,8 +236,17 @@ def test_correlatividad_detecta_huecos_en_nc():
     assert res[0].cantidad == 2
 
 
-def test_correlatividad_ignora_comprobantes_no_nc():
-    recs = [_emp("F001", 10, tipo="01", numero=str(n)) for n in (1, 5)]  # facturas
+def test_correlatividad_detecta_huecos_en_facturas():
+    recs = [_emp("F201", 10, tipo="01", numero=str(n)) for n in (5685, 5688)]  # faltan 5686, 5687
+    res = detectar_correlatividad(recs)
+    assert len(res) == 1
+    assert res[0].tipo == "01"
+    assert res[0].faltantes == "5686-5687"
+    assert res[0].cantidad == 2
+
+
+def test_correlatividad_ignora_tipos_sin_correlatividad():
+    recs = [_emp("ND01", 10, tipo="08", numero=str(n)) for n in (1, 5)]  # notas de débito
     assert detectar_correlatividad(recs) == []
 
 

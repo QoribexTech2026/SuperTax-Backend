@@ -2,8 +2,8 @@
 Observaciones del Registro de Ventas: correlatividad y duplicados.
 
 Dos revisiones que no cubren los escenarios A/B/C/D:
-  - Correlatividad: huecos en la numeración de boletas (03) y notas de crédito
-    (07); una serie debería ser continua, y un número faltante puede ser un
+  - Correlatividad: huecos en la numeración de facturas (01), boletas (03) y
+    notas de crédito (07); una serie debería ser continua, y un número faltante puede ser un
     documento sin declarar. Se maneja por rangos: cada boleta puede declararse
     como un rango (número inicial→final) y cada NC como un rango de un solo
     número; se buscan los huecos entre rangos consecutivos sin materializar los
@@ -16,8 +16,9 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 
-# Tipos sobre los que se revisan huecos: boletas (03) y notas de crédito (07).
-_TIPOS_CORRELATIVIDAD = {"03", "07"}
+# Tipos sobre los que se revisan huecos: facturas (01), boletas (03) y notas de
+# crédito (07). Las tres deberían tener numeración correlativa dentro de la serie.
+_TIPOS_CORRELATIVIDAD = {"01", "03", "07"}
 
 # Una serie se marca "irregular" (en vez de listar sus faltantes) si tiene un
 # salto gigante entre rangos —típico de una numeración que cambia de longitud,
