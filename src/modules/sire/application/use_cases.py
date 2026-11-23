@@ -5,6 +5,7 @@ Orquestan el dominio a través de sus puertos (no conocen SQLAlchemy ni FastAPI)
 El procesamiento de la conciliación (motor SUNAT + worker) se incorpora en el
 sub-paso 2b-2; aquí están la lectura y la creación del job.
 """
+import re
 import uuid
 
 from src.modules.sire.domain.entities import ReconciliationJob, TipoLibro
@@ -36,10 +37,30 @@ def _validar_periodo(periodo: str) -> None:
         raise ValueError("Periodo inválido")
 
 
+# Nombre de archivo PLE/propuesta de SUNAT: dos letras (p. ej. "LE"), el RUC del
+# contribuyente (11 dígitos) y el periodo (AAAAMM).
+_RUC_EN_NOMBRE = re.compile(r"^[A-Za-z]{2}(\d{11})\d{6}")
+
+
+def _validar_ruc_archivo(filename: str | None, company_ruc: str) -> None:
+    """Si el nombre del archivo sigue el patrón SUNAT y su RUC no es el de la
+    empresa activa, es el PLE de otra empresa → se rechaza (produciría un cruce
+    inválido). Si el nombre no permite extraer el RUC (renombrado), no se valida."""
+    if not filename:
+        return
+    m = _RUC_EN_NOMBRE.match(filename)
+    if m and m.group(1) != str(company_ruc).strip():
+        raise ValueError(
+            f"El archivo pertenece al RUC {m.group(1)}, distinto de la empresa "
+            f"seleccionada (RUC {company_ruc}). Verifica que subiste el PLE correcto."
+        )
+
+
 def create_reconciliation_job(
     repo: ReconciliationRepository,
     storage: FileStorage,
     company_id: int,
+    company_ruc: str,
     user_id: int,
     periodo: str,
     tipo_libro: TipoLibro,
@@ -62,6 +83,7 @@ def create_reconciliation_job(
     - reutilizar_propuesta: aprovechar una propuesta fresca de otro job si existe.
     """
     _validar_periodo(periodo)
+    _validar_ruc_archivo(filename, company_ruc)
     if not content:
         raise ValueError("El archivo está vacío")
 

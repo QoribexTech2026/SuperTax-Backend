@@ -142,6 +142,7 @@ async def create_job(
             SqlReconciliationRepository(db),
             storage,
             company_id=ctx.company.id,
+            company_ruc=ctx.company.ruc,
             user_id=ctx.user.id,
             periodo=periodo,
             tipo_libro=tipo_libro,

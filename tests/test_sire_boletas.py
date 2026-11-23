@@ -385,3 +385,23 @@ def test_dashboard_opcional_se_omite_con_incluir_dashboard_false():
     sin = load_workbook(BytesIO(generate_excel(**args, incluir_dashboard=False)))
     assert "Dashboard" in con.sheetnames
     assert "Dashboard" not in sin.sheetnames
+
+
+# ── Validación: el RUC del nombre del PLE debe ser el de la empresa ──────
+
+def test_validar_ruc_archivo_coincide_no_falla():
+    from src.modules.sire.application.use_cases import _validar_ruc_archivo
+    _validar_ruc_archivo("LE2056352937820261000140100001111.txt", "20563529378")
+
+
+def test_validar_ruc_archivo_distinto_rechaza():
+    import pytest
+    from src.modules.sire.application.use_cases import _validar_ruc_archivo
+    with pytest.raises(ValueError, match="20100154219"):
+        _validar_ruc_archivo("LE2010015421920260100140100001111.txt", "20563529378")
+
+
+def test_validar_ruc_archivo_renombrado_no_valida():
+    from src.modules.sire.application.use_cases import _validar_ruc_archivo
+    _validar_ruc_archivo("ventas_octubre.txt", "20563529378")  # sin patrón SUNAT → se permite
+    _validar_ruc_archivo(None, "20563529378")
