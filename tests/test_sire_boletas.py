@@ -323,3 +323,53 @@ def test_reporte_incluye_hoja_observaciones():
         propuesta_generada=datetime.now(timezone.utc),
     )
     assert "Observaciones" in load_workbook(BytesIO(xlsx)).sheetnames
+
+
+# ── DUA (tipo 50): cruce sin RUC ────────────────────────────────────────
+
+def test_clave_comprobante_dua_ignora_ruc():
+    from src.modules.sire.infrastructure.parser.clave import clave_comprobante
+    # Tipo 50: misma serie+número con RUC distinto → misma clave (casan).
+    assert clave_comprobante("111", "50", "118", "2024") == clave_comprobante("999", "50", "118", "2024")
+    # Comprobante normal: RUC distinto → clave distinta (no casan).
+    assert clave_comprobante("111", "01", "F001", "5") != clave_comprobante("999", "01", "F001", "5")
+
+
+def _dua_emp(ruc, igv, total):
+    return EmpresaRecord(tipo_cdp="50", serie="118", numero="2024", ruc_proveedor=ruc,
+                         base_imponible=total - igv, igv=igv, importe_total=total,
+                         fecha_emision="2026-01-10")
+
+
+def _dua_sun(ruc, igv, total):
+    return SunatRecord(tipo_cdp="50", serie="118", numero="2024", ruc_proveedor=ruc,
+                       base_imponible=total - igv, igv=igv, importe_total=total,
+                       fecha_emision="2026-01-10", tipo_cambio=1.0)
+
+
+def test_dua_tipo_50_coincide_pese_a_distinto_ruc():
+    # Misma DUA (serie/número/IGV iguales), RUC operador vs proveedor → cae en D.
+    out = reconcile([_dua_emp("20100000001", 228.81, 1500.0)],
+                    [_dua_sun("20555555555", 228.81, 1500.0)], "compras", None, periodo="202601")
+    assert len(out.scenario_d) == 1
+    assert out.scenario_a == [] and out.scenario_b == []
+
+
+def test_dua_tipo_50_igv_distinto_cae_en_c():
+    # Serie/número iguales pero IGV difiere más que la tolerancia → diferencia (C), no A/B.
+    out = reconcile([_dua_emp("20100000001", 228.81, 1500.0)],
+                    [_dua_sun("20555555555", 244.07, 1600.0)], "compras", None, periodo="202601")
+    assert len(out.scenario_c) == 1
+    assert out.scenario_a == [] and out.scenario_b == []
+
+
+def test_comprobante_normal_distinto_ruc_no_coincide():
+    # Regresión: una factura (01) con RUC distinto SIGUE sin casar (A y B).
+    emp = [EmpresaRecord(tipo_cdp="01", serie="F001", numero="5", ruc_proveedor="20100000001",
+                         base_imponible=100.0, igv=18.0, importe_total=118.0, fecha_emision="2026-01-10")]
+    sun = [SunatRecord(tipo_cdp="01", serie="F001", numero="5", ruc_proveedor="20555555555",
+                       base_imponible=100.0, igv=18.0, importe_total=118.0, fecha_emision="2026-01-10",
+                       tipo_cambio=1.0)]
+    out = reconcile(emp, sun, "compras", None, periodo="202601")
+    assert len(out.scenario_a) == 1 and len(out.scenario_b) == 1
+    assert out.scenario_d == []

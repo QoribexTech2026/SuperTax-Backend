@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 import pandas as pd
 
+from src.modules.sire.infrastructure.parser.clave import clave_comprobante
+
 
 @dataclass
 class ColumnMapping:
@@ -80,11 +82,7 @@ class EmpresaRecord:
 
     @property
     def key(self) -> tuple:
-        r = str(self.ruc_proveedor).strip()
-        t = str(self.tipo_cdp).strip().upper()
-        s = str(self.serie).strip().upper()
-        n = str(self.numero).strip().lstrip("0") or "0"
-        return (r, t, s, n)
+        return clave_comprobante(self.ruc_proveedor, self.tipo_cdp, self.serie, self.numero)
 
 
 _TIPO_CDP_PATTERN = re.compile(r"^(0[0-9]|[1-9][0-9]|[A-Z]{2})$")

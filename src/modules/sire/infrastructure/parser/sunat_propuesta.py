@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from src.modules.sire.infrastructure.parser.clave import clave_comprobante
+
 
 @dataclass(slots=True)
 class SunatRecord:
@@ -29,11 +31,7 @@ class SunatRecord:
 
     @property
     def key(self) -> tuple:
-        r = str(self.ruc_proveedor).strip()
-        t = str(self.tipo_cdp).strip().upper()
-        s = str(self.serie).strip().upper()
-        n = str(self.numero).strip().lstrip("0") or "0"
-        return (r, t, s, n)
+        return clave_comprobante(self.ruc_proveedor, self.tipo_cdp, self.serie, self.numero)
 
 
 VENTAS_COL_IDX: dict[str, int] = {
