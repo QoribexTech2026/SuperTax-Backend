@@ -117,6 +117,8 @@ def _agregar_hoja_boletas(wb, boletas) -> None:
         else:
             estado_cell.fill, estado_cell.font = AMBER_FILL, AMBER_FONT
     _finish_sheet(ws, 6, num_cols=[3, 4, 5])
+    if not boletas:
+        ws.cell(row=3, column=1, value="Sin boletas en el archivo.").font = NOTE_FONT
 
 
 def _agregar_hoja_observaciones(wb, correlatividad, duplicados) -> None:
@@ -208,9 +210,12 @@ def _agregar_hoja_diferencias_tc(wb, diferencias) -> None:
             celda = ws.cell(row=row, column=col)
             if celda.value is not None:
                 celda.number_format = fmt
+    if not diferencias:
+        ws.cell(row=3, column=1, value="Sin diferencias de tipo de cambio.").font = NOTE_FONT
 
 
-def _agregar_hoja_duplicidad(wb, nombre: str, filas, rpta_validez=None, periodos_previos=None) -> None:
+def _agregar_hoja_duplicidad(wb, nombre: str, filas, rpta_validez=None, periodos_previos=None,
+                             nota_vacia: str = "Sin comprobantes duplicados.") -> None:
     """Hoja de duplicidad (detalle por comprobante). Se usa tanto para la duplicidad
     dentro del mes como para la duplicidad contra periodos anteriores. Si se pasa
     `rpta_validez` ({(tipo,serie,numero): estado}) agrega la columna «Rpta SUNAT»; si
@@ -248,6 +253,8 @@ def _agregar_hoja_duplicidad(wb, nombre: str, filas, rpta_validez=None, periodos
         celda_tc = ws.cell(row=row, column=11)
         if celda_tc.value is not None:
             celda_tc.number_format = _TC_FMT
+    if not filas:
+        ws.cell(row=3, column=1, value=nota_vacia).font = NOTE_FONT
 
 
 def _agregar_hoja_correlatividad_anterior(wb, cortes) -> None:
@@ -270,6 +277,12 @@ def _agregar_hoja_correlatividad_anterior(wb, cortes) -> None:
             if col_idx == 6:
                 celda.alignment = Alignment(horizontal="center")
     _finish_sheet(ws, 6)
+    if not cortes:
+        ws.cell(
+            row=3, column=1,
+            value="Sin cortes de correlatividad contra el mes anterior. "
+                  "Esta validación aplica solo si subes el PLE del mes previo.",
+        ).font = NOTE_FONT
 
 
 def generate_excel(
@@ -476,20 +489,28 @@ def generate_excel(
             ws.cell(row=r, column=3, value=detalle).font = NOTE_FONT
             r += 1
 
-    # Guía de hojas (solo ventas con boletas, que es cuando existen esas pestañas).
-    if tipo_libro != "compras" and output.boletas_agregadas:
+    # Guía de hojas (solo ventas). Las hojas de detalle diario y el Dashboard solo
+    # existen si hay boletas y se activó el check; el resto aparece siempre.
+    if tipo_libro != "compras":
         r += 1
         ws.cell(row=r, column=2, value="GUÍA DE HOJAS").font = SECTION_FONT
         r += 1
         guia = [
             ("A – D", "Comprobantes documento a documento: facturas y notas de crédito, más las boletas agregadas como «Boletas del día»."),
             ("Cruce boletas", "Boletas comparadas por serie y día (lista): IGV de cada lado, diferencia y estado (cuadra / difiere / solo en un lado)."),
-            ("PLE por dia", "IGV de las boletas que TÚ declaraste, por serie (filas) y día (columnas)."),
-            ("SIRE por dia", "IGV de las boletas que tiene SUNAT, por serie y día."),
-            ("Diferencias por dia", "Resta PLE − SIRE por serie y día; resalta en ámbar donde no cuadra."),
-            ("Dashboard", "Vista interactiva: elige una serie y ve sus KPIs, su detalle diario y el top de series con mayor diferencia."),
-            ("Observaciones", "Números de boletas y notas de crédito faltantes (correlatividad) y comprobantes duplicados."),
+            ("Observaciones", "Facturas, boletas y notas de crédito con numeración faltante (correlatividad) y comprobantes duplicados."),
+            ("Diferencias TC", "Comprobantes en moneda extranjera cuyo tipo de cambio del PLE no coincide con el TC oficial de la fecha."),
+            ("Duplicidad en el periodo", "Comprobantes declarados más de una vez dentro del mes."),
+            ("Duplicidad periodos anteriores", "Comprobantes del mes que ya estaban en un PLE de un mes previo (requiere subir esos meses)."),
+            ("Correlatividad mes anterior", "Series cuyo primer número del mes no continúa del último declarado el mes anterior (requiere subir el mes previo)."),
         ]
+        if incluir_dashboard and output.boletas_agregadas:
+            guia += [
+                ("PLE por dia", "IGV de las boletas que TÚ declaraste, por serie (filas) y día (columnas)."),
+                ("SIRE por dia", "IGV de las boletas que tiene SUNAT, por serie y día."),
+                ("Diferencias por dia", "Resta PLE − SIRE por serie y día; resalta en ámbar donde no cuadra."),
+                ("Dashboard", "Vista interactiva: elige una serie y ve sus KPIs, su detalle diario y el top de series con mayor diferencia."),
+            ]
         for hoja, desc in guia:
             ws.cell(row=r, column=2, value=hoja).font = BOLD
             ws.cell(row=r, column=3, value=desc).font = NOTE_FONT
@@ -785,32 +806,32 @@ def generate_excel(
                 cell.border = THIN_BORDER
     _finish_sheet(ws_d, n_cols_d, num_cols=num_cols_d if use_fmt_d else None)
 
-    # Boletas (solo ventas): hoja de detalle serie×día + dashboard interactivo.
-    # El dashboard es opcional (el usuario lo decide al cargar).
-    if not es_compras and output.boletas_agregadas:
+    # Las hojas de ventas se incluyen SIEMPRE (vacías con una nota si no hay datos),
+    # para que el reporte tenga una estructura estable. Excepción: el Dashboard (y
+    # sus hojas «…por día») es interactivo y opcional, así que solo se arma cuando
+    # hay boletas y el usuario lo activó —vacío no tendría serie que mostrar—.
+    if not es_compras:
         _agregar_hoja_boletas(wb, output.boletas_agregadas)
-        if incluir_dashboard:
+        if incluir_dashboard and output.boletas_agregadas:
             agregar_hoja_dashboard(wb, output.boletas_agregadas)
 
-    # Observaciones (solo ventas): correlatividad de NC y duplicados.
-    if not es_compras and (output.correlatividad or output.duplicados):
         _agregar_hoja_observaciones(wb, output.correlatividad, output.duplicados)
+        _agregar_hoja_diferencias_tc(wb, diferencias_tc or [])
 
-    # Diferencias de tipo de cambio (solo ventas): TC del PLE vs TC oficial.
-    if not es_compras and diferencias_tc:
-        _agregar_hoja_diferencias_tc(wb, diferencias_tc)
-
-    # Duplicidad y correlatividad entre periodos (solo ventas).
-    validez = rpta_validez if rpta_validez else None
-    if not es_compras and duplicados_periodo:
-        _agregar_hoja_duplicidad(wb, "Duplicidad en el periodo", duplicados_periodo, validez)
-    if not es_compras and duplicados_anterior:
+        # Duplicidad y correlatividad entre periodos: las de «mes anterior» avisan en
+        # la propia hoja cuando no se subieron los PLE previos (no es "todo OK").
+        validez = rpta_validez if rpta_validez else None
         _agregar_hoja_duplicidad(
-            wb, "Duplicidad periodos anteriores", duplicados_anterior, validez,
-            periodos_previos=periodos_previos_anterior,
+            wb, "Duplicidad en el periodo", duplicados_periodo or [], validez,
+            nota_vacia="Sin comprobantes duplicados en el periodo.",
         )
-    if not es_compras and cortes_correlatividad:
-        _agregar_hoja_correlatividad_anterior(wb, cortes_correlatividad)
+        _agregar_hoja_duplicidad(
+            wb, "Duplicidad periodos anteriores", duplicados_anterior or [], validez,
+            periodos_previos=periodos_previos_anterior,
+            nota_vacia="Sin duplicados contra meses anteriores. "
+                       "Esta validación aplica solo si subes los PLE de meses previos.",
+        )
+        _agregar_hoja_correlatividad_anterior(wb, cortes_correlatividad or [])
 
     buf = io.BytesIO()
     wb.save(buf)

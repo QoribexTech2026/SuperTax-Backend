@@ -387,6 +387,30 @@ def test_dashboard_opcional_se_omite_con_incluir_dashboard_false():
     assert "Dashboard" not in sin.sheetnames
 
 
+def test_hojas_de_ventas_aparecen_siempre_aunque_sin_datos():
+    # Ventas con una sola factura que cuadra: sin boletas, sin faltantes, sin
+    # duplicados y sin meses previos. Igual deben estar todas las hojas de ventas.
+    out = reconcile(
+        [_emp("F001", 18, base=100.0, importe=118.0, tipo="01", numero="1")],
+        [_sun("F001", 18, base=100.0, importe=118.0, tipo="01", numero="1")],
+        "ventas", None, periodo="202605",
+    )
+    assert not out.boletas_agregadas and not out.correlatividad and not out.duplicados
+    wb = load_workbook(BytesIO(generate_excel(
+        output=out, empresa_nombre="ARUMA", ruc="20600657888",
+        periodo="202605", tipo_libro="ventas",
+        propuesta_generada=datetime.now(timezone.utc),
+    )))
+    for hoja in (
+        "Cruce boletas", "Observaciones", "Diferencias TC",
+        "Duplicidad en el periodo", "Duplicidad periodos anteriores",
+        "Correlatividad mes anterior",
+    ):
+        assert hoja in wb.sheetnames, f"falta la hoja {hoja}"
+    # Sin boletas, el Dashboard interactivo no aplica.
+    assert "Dashboard" not in wb.sheetnames
+
+
 # ── Validación: el RUC del nombre del PLE debe ser el de la empresa ──────
 
 def test_validar_ruc_archivo_coincide_no_falla():
