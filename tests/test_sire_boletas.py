@@ -330,9 +330,15 @@ def test_reporte_incluye_hoja_observaciones():
 def test_clave_comprobante_dua_ignora_ruc():
     from src.modules.sire.infrastructure.parser.clave import clave_comprobante
     # Tipo 50: misma serie+número con RUC distinto → misma clave (casan).
-    assert clave_comprobante("111", "50", "118", "2024") == clave_comprobante("999", "50", "118", "2024")
+    assert (
+        clave_comprobante("111", "50", "118", "2024")
+        == clave_comprobante("999", "50", "118", "2024")
+    )
     # Comprobante normal: RUC distinto → clave distinta (no casan).
-    assert clave_comprobante("111", "01", "F001", "5") != clave_comprobante("999", "01", "F001", "5")
+    assert (
+        clave_comprobante("111", "01", "F001", "5")
+        != clave_comprobante("999", "01", "F001", "5")
+    )
 
 
 def _dua_emp(ruc, igv, total):
@@ -365,11 +371,15 @@ def test_dua_tipo_50_igv_distinto_cae_en_c():
 
 def test_comprobante_normal_distinto_ruc_no_coincide():
     # Regresión: una factura (01) con RUC distinto SIGUE sin casar (A y B).
-    emp = [EmpresaRecord(tipo_cdp="01", serie="F001", numero="5", ruc_proveedor="20100000001",
-                         base_imponible=100.0, igv=18.0, importe_total=118.0, fecha_emision="2026-01-10")]
-    sun = [SunatRecord(tipo_cdp="01", serie="F001", numero="5", ruc_proveedor="20555555555",
-                       base_imponible=100.0, igv=18.0, importe_total=118.0, fecha_emision="2026-01-10",
-                       tipo_cambio=1.0)]
+    emp = [EmpresaRecord(
+        tipo_cdp="01", serie="F001", numero="5", ruc_proveedor="20100000001",
+        base_imponible=100.0, igv=18.0, importe_total=118.0, fecha_emision="2026-01-10",
+    )]
+    sun = [SunatRecord(
+        tipo_cdp="01", serie="F001", numero="5", ruc_proveedor="20555555555",
+        base_imponible=100.0, igv=18.0, importe_total=118.0, fecha_emision="2026-01-10",
+        tipo_cambio=1.0,
+    )]
     out = reconcile(emp, sun, "compras", None, periodo="202601")
     assert len(out.scenario_a) == 1 and len(out.scenario_b) == 1
     assert out.scenario_d == []
@@ -420,6 +430,7 @@ def test_validar_ruc_archivo_coincide_no_falla():
 
 def test_validar_ruc_archivo_distinto_rechaza():
     import pytest
+
     from src.modules.sire.application.use_cases import _validar_ruc_archivo
     with pytest.raises(ValueError, match="20100154219"):
         _validar_ruc_archivo("LE2010015421920260100140100001111.txt", "20563529378")
