@@ -217,22 +217,43 @@ def procesar_conciliacion(payload: dict) -> dict:
             # automático; lo persiste el proceso principal tras guardar el job.
             indice_periodo = construir_indice(filas_actual)
             duplicados_periodo = cruce.duplicados_en_periodo(filas_actual)
+            en_periodo = cruce.claves_duplicadas_en_periodo(filas_actual)
+
+            # Opción B: PLE de meses previos subidos a mano en ESTE job.
             filas_prev_por_mes: list = []
             for prev_path in payload.get("empresa_prev_file_paths") or []:
                 filas_prev = parse_ple_ventas(storage.read(prev_path))
                 if filas_prev:
                     filas_prev_por_mes.append(filas_prev)
-            if filas_prev_por_mes:
-                en_periodo = cruce.claves_duplicadas_en_periodo(filas_actual)
-                origen = cruce.claves_a_periodos(filas_prev_por_mes)
+            origen_files = cruce.claves_a_periodos(filas_prev_por_mes)
+            ultimos_files = cruce.ultimos_con_periodo(filas_prev_por_mes)
+            del filas_prev_por_mes
+
+            # Opción C: historial automático ya resuelto por el proceso principal.
+            origen_store = {
+                (t, s, n): periodos
+                for t, s, n, periodos in payload.get("origen_store") or []
+            }
+            ultimos_store = {
+                (t, s): (periodo, numero)
+                for t, s, periodo, numero in payload.get("ultimos_store") or []
+            }
+
+            # Fusión de ambas fuentes (unión para duplicidad; periodo más reciente
+            # por serie para correlatividad).
+            origen = cruce.merge_origen(origen_files, origen_store)
+            ultimos = cruce.merge_ultimos(ultimos_files, ultimos_store)
+            if origen:
                 duplicados_anterior = cruce.duplicados_con_anterior(
                     filas_actual, set(origen), en_periodo
                 )
-                periodos_previos_anterior = cruce.periodos_previos_de(duplicados_anterior, origen)
-                # Correlatividad: solo el mes inmediatamente anterior (el de mayor periodo).
-                filas_mes_previo = max(filas_prev_por_mes, key=lambda fs: fs[0].periodo)
-                cortes_correlatividad = cruce.cortes_correlatividad(filas_actual, filas_mes_previo)
-                del filas_prev_por_mes
+                periodos_previos_anterior = cruce.periodos_previos_de(
+                    duplicados_anterior, origen
+                )
+            if ultimos:
+                cortes_correlatividad = cruce.cortes_correlatividad_desde_ultimos(
+                    filas_actual, ultimos
+                )
         del filas_actual
     del contenido
 

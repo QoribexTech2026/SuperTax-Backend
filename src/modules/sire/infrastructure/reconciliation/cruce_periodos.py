@@ -72,7 +72,9 @@ def claves_a_periodos(filas_por_mes: list[list[FilaPLE]]) -> dict[Clave, list[st
     acumulado: dict[Clave, set[str]] = {}
     for filas in filas_por_mes:
         for f in filas:
-            acumulado.setdefault(_clave(f), set()).add(f.periodo)
+            # Periodo canónico AAAAMM (el PLE trae AAAAMM00): así coincide con el
+            # periodo del historial automático al fusionar y lo formatea _fmt_periodo.
+            acumulado.setdefault(_clave(f), set()).add(f.periodo[:6])
     return {clave: sorted(periodos) for clave, periodos in acumulado.items()}
 
 
@@ -146,13 +148,13 @@ def _primeros_por_serie(filas: list[FilaPLE]) -> dict[tuple[str, str], int]:
     return out
 
 
-def cortes_correlatividad(
-    filas_actual: list[FilaPLE], filas_anterior: list[FilaPLE]
+def cortes_correlatividad_desde_ultimos(
+    filas_actual: list[FilaPLE], ultimos: dict[tuple[str, str], int]
 ) -> list[CorteSerie]:
-    """Por serie de boletas/NC, el hueco entre el último número del mes anterior y
-    el primero del mes actual (si el actual no continúa en +1)."""
+    """Por serie, el hueco entre `ultimos[(tipo, serie)]` (último número del periodo
+    previo) y el primero del mes actual (si el actual no continúa en +1). Acepta el
+    `ultimos` ya resuelto, venga de un archivo o del historial automático (Opción C)."""
     primeros = _primeros_por_serie(filas_actual)
-    ultimos = _ultimos_por_serie(filas_anterior)
 
     cortes: list[CorteSerie] = []
     for (tipo, serie), primero in primeros.items():
@@ -172,3 +174,58 @@ def cortes_correlatividad(
         cortes.append(CorteSerie(tipo, serie, ultimo, primero, faltantes, cantidad))
     cortes.sort(key=lambda c: (c.tipo, c.serie))
     return cortes
+
+
+def cortes_correlatividad(
+    filas_actual: list[FilaPLE], filas_anterior: list[FilaPLE]
+) -> list[CorteSerie]:
+    """Variante desde las filas del mes anterior (Opción B): deriva su último número
+    por serie y delega. Se conserva para la subida manual de PLE previos."""
+    return cortes_correlatividad_desde_ultimos(
+        filas_actual, _ultimos_por_serie(filas_anterior)
+    )
+
+
+def ultimos_con_periodo(
+    filas_por_mes: list[list[FilaPLE]],
+) -> dict[tuple[str, str], tuple[str, int]]:
+    """Por (tipo, serie), el (periodo, último número) del PLE previo MÁS RECIENTE que
+    la declara. Base para fusionar con el historial automático eligiendo, por serie,
+    el periodo más reciente venga de archivo o de BD."""
+    out: dict[tuple[str, str], tuple[str, int]] = {}
+    for filas in filas_por_mes:
+        if not filas:
+            continue
+        periodo = filas[0].periodo[:6]  # canónico AAAAMM (ver claves_a_periodos)
+        for clave, numero in _ultimos_por_serie(filas).items():
+            actual = out.get(clave)
+            if actual is None or periodo > actual[0]:
+                out[clave] = (periodo, numero)
+    return out
+
+
+def merge_origen(
+    *fuentes: dict[Clave, list[str]],
+) -> dict[Clave, list[str]]:
+    """Une varios orígenes clave→periodos (archivos subidos + historial automático):
+    por clave, la unión ordenada de todos los periodos previos donde aparece."""
+    acumulado: dict[Clave, set[str]] = {}
+    for fuente in fuentes:
+        for clave, periodos in fuente.items():
+            acumulado.setdefault(clave, set()).update(periodos)
+    return {clave: sorted(periodos) for clave, periodos in acumulado.items()}
+
+
+def merge_ultimos(
+    *fuentes: dict[tuple[str, str], tuple[str, int]],
+) -> dict[tuple[str, str], int]:
+    """Fusiona varios `ultimos_con_periodo` (archivos + BD): por serie, el número del
+    periodo previo MÁS RECIENTE (así, si falta el mes inmediatamente anterior, usa el
+    último disponible). Devuelve ya solo el número, listo para la correlatividad."""
+    ganador: dict[tuple[str, str], tuple[str, int]] = {}
+    for fuente in fuentes:
+        for clave, (periodo, numero) in fuente.items():
+            actual = ganador.get(clave)
+            if actual is None or periodo > actual[0]:
+                ganador[clave] = (periodo, numero)
+    return {clave: numero for clave, (_periodo, numero) in ganador.items()}

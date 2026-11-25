@@ -1,7 +1,8 @@
 """Repositorios SQLAlchemy del módulo SIRE (schema `sire`)."""
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import String, bindparam, delete, insert, select, text, update
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Session
 
 from src.modules.sire.domain.entities import (
@@ -153,6 +154,64 @@ class SqlReconciliationRepository:
                 .order_by(PeriodClaveModel.periodo)
             )
         )
+
+    def cruce_duplicidad_store(
+        self, company_id: int, tipo_libro: str, periodo: str, claves: list,
+    ) -> list:
+        """Opción C (lectura): para las claves (tipo, serie, número) del mes actual,
+        los periodos < `periodo` del store donde ya aparecen. Devuelve SOLO las que
+        colisionan: ``[[tipo, serie, numero, [periodos]], ...]``.
+
+        El cruce es un JOIN indexado contra `period_clave` usando `unnest` de arrays
+        (sin tabla temporal → sin estado que limpie el pool): la membresía la resuelve
+        Postgres por índice, sin traer el historial a memoria."""
+        if not claves:
+            return []
+        stmt = text(
+            """
+            SELECT pc.tipo, pc.serie, pc.numero,
+                   array_agg(DISTINCT pc.periodo ORDER BY pc.periodo) AS periodos
+            FROM sire.period_clave pc
+            JOIN unnest(:tipos, :series, :numeros) AS cur(tipo, serie, numero)
+              ON pc.tipo = cur.tipo AND pc.serie = cur.serie AND pc.numero = cur.numero
+            WHERE pc.company_id = :cid AND pc.tipo_libro = :libro
+              AND pc.periodo < :periodo
+            GROUP BY pc.tipo, pc.serie, pc.numero
+            """
+        ).bindparams(
+            bindparam("tipos", type_=ARRAY(String)),
+            bindparam("series", type_=ARRAY(String)),
+            bindparam("numeros", type_=ARRAY(String)),
+        )
+        rows = self._db.execute(
+            stmt,
+            {
+                "tipos": [c[0] for c in claves],
+                "series": [c[1] for c in claves],
+                "numeros": [c[2] for c in claves],
+                "cid": company_id, "libro": tipo_libro, "periodo": periodo,
+            },
+        )
+        return [[r.tipo, r.serie, r.numero, list(r.periodos)] for r in rows]
+
+    def cruce_correlatividad_store(
+        self, company_id: int, tipo_libro: str, periodo: str,
+    ) -> list:
+        """Opción C (lectura): por serie, el (periodo, numero_max) del periodo previo
+        MÁS RECIENTE (< `periodo`). Devuelve ``[[tipo, serie, periodo, numero_max], ...]``.
+        No asume `periodo-1`: toma el último disponible por serie (meses no consecutivos)."""
+        stmt = text(
+            """
+            SELECT DISTINCT ON (tipo, serie) tipo, serie, periodo, numero_max
+            FROM sire.serie_max
+            WHERE company_id = :cid AND tipo_libro = :libro AND periodo < :periodo
+            ORDER BY tipo, serie, periodo DESC
+            """
+        )
+        rows = self._db.execute(
+            stmt, {"cid": company_id, "libro": tipo_libro, "periodo": periodo}
+        )
+        return [[r.tipo, r.serie, r.periodo, int(r.numero_max)] for r in rows]
 
     def buscar_ticket_fresco(
         self,

@@ -89,7 +89,8 @@ def test_duplicados_contra_varios_meses_une_claves_y_marca_origen():
     previos = cp.periodos_previos_de(dups, origen)
 
     assert [(d.serie, d.numero) for d in dups] == [("FA10", "00000001"), ("FA57", "00000002")]
-    assert previos == [["20260700", "20260800"], ["20260800"]]
+    # Periodo canónico AAAAMM (el PLE trae AAAAMM00).
+    assert previos == [["202607", "202608"], ["202608"]]
 
 
 def test_correlatividad_hueco_pequeno():

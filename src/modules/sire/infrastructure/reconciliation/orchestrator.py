@@ -31,6 +31,7 @@ from src.modules.sire.infrastructure.models import (
     ReconciliationJobModel,
     SireCredentialsModel,
 )
+from src.modules.sire.infrastructure.reconciliation.period_index import escanear_indice
 from src.modules.sire.infrastructure.reconciliation.worker import (
     extraer_periodos_emision,
     procesar_conciliacion,
@@ -45,6 +46,7 @@ from src.modules.sire.infrastructure.sunat.auth import get_sunat_token
 from src.modules.sire.infrastructure.tipo_cambio import sincronizador
 from src.platform.credentials import vault
 from src.platform.database.base import utcnow
+from src.platform.storage import storage
 from src.platform.tenancy.models import Company
 
 logger = logging.getLogger("sire.orchestrator")
@@ -298,6 +300,36 @@ class _JobSnapshot:
     extra_tickets: dict[str, str]
 
 
+def _historial_store(
+    repo: SqlReconciliationRepository, snap: "_JobSnapshot", tipo_libro: TipoLibro,
+) -> tuple[list, list]:
+    """Opción C (Fase 2, lectura): cruza el mes actual contra el historial guardado.
+    Escanea el PLE del mes (streaming liviano) para la duplicidad y consulta el último
+    número por serie para la correlatividad; devuelve (origen_store, ultimos_store)
+    listos para el payload. Degrada a vacío —y lo registra— si algo falla: el reporte
+    usará solo los PLE subidos a mano (Opción B)."""
+    if tipo_libro != TipoLibro.ventas or not snap.empresa_file_path:
+        return [], []
+    try:
+        contenido = storage.read(snap.empresa_file_path)
+        claves = escanear_indice(contenido)["claves"]
+        del contenido
+        origen = repo.cruce_duplicidad_store(
+            snap.company_id, tipo_libro.value, snap.periodo, claves
+        )
+        ultimos = repo.cruce_correlatividad_store(
+            snap.company_id, tipo_libro.value, snap.periodo
+        )
+        return origen, ultimos
+    except Exception:
+        logger.warning(
+            "No se pudo leer el historial automático (company=%s periodo=%s); el "
+            "reporte usará solo los PLE subidos a mano",
+            snap.company_id, snap.periodo, exc_info=True,
+        )
+        return [], []
+
+
 def _persistir_indice(
     repo: SqlReconciliationRepository, snap: "_JobSnapshot",
     tipo_libro: TipoLibro, result: dict,
@@ -489,9 +521,15 @@ async def procesar_job(db: Session, job_id: int) -> None:
             db, snap.company_id, tipo_libro
         )
 
+        # Historial automático (Opción C): cruces contra periodos anteriores leídos
+        # del store, para no depender de que el usuario re-suba los PLE.
+        origen_store, ultimos_store = _historial_store(repo, snap, tipo_libro)
+
         payload = {
             "empresa_file_path": snap.empresa_file_path,
             "empresa_prev_file_paths": snap.empresa_prev_file_paths,
+            "origen_store": origen_store,
+            "ultimos_store": ultimos_store,
             "empresa_filename": snap.empresa_filename,
             "sunat_tmp_path": sunat_tmp_path,
             "tipo_libro": tipo_libro.value,
