@@ -280,8 +280,8 @@ def _agregar_hoja_correlatividad_anterior(wb, cortes) -> None:
     if not cortes:
         ws.cell(
             row=3, column=1,
-            value="Sin cortes de correlatividad contra el mes anterior. "
-                  "Esta validación aplica solo si subes el PLE del mes previo.",
+            value="Sin cortes de correlatividad contra periodos anteriores. Se compara "
+                  "automáticamente contra los periodos ya conciliados y los PLE que subas.",
         ).font = NOTE_FONT
 
 
@@ -501,8 +501,8 @@ def generate_excel(
             ("Observaciones", "Facturas, boletas y notas de crédito con numeración faltante (correlatividad) y comprobantes duplicados."),
             ("Diferencias TC", "Comprobantes en moneda extranjera cuyo tipo de cambio del PLE no coincide con el TC oficial de la fecha."),
             ("Duplicidad en el periodo", "Comprobantes declarados más de una vez dentro del mes."),
-            ("Duplicidad periodos anteriores", "Comprobantes del mes que ya estaban en un PLE de un mes previo (requiere subir esos meses)."),
-            ("Correlatividad mes anterior", "Series cuyo primer número del mes no continúa del último declarado el mes anterior (requiere subir el mes previo)."),
+            ("Duplicidad periodos anteriores", "Comprobantes del mes que ya estaban en un periodo anterior (historial automático + los PLE que subas)."),
+            ("Correlatividad mes anterior", "Series cuyo primer número del mes no continúa del último declarado antes (historial automático + los PLE que subas)."),
         ]
         if incluir_dashboard and output.boletas_agregadas:
             guia += [
@@ -828,8 +828,8 @@ def generate_excel(
         _agregar_hoja_duplicidad(
             wb, "Duplicidad periodos anteriores", duplicados_anterior or [], validez,
             periodos_previos=periodos_previos_anterior,
-            nota_vacia="Sin duplicados contra meses anteriores. "
-                       "Esta validación aplica solo si subes los PLE de meses previos.",
+            nota_vacia="Sin duplicados contra periodos anteriores. Se compara "
+                       "automáticamente contra los periodos ya conciliados y los PLE que subas.",
         )
         _agregar_hoja_correlatividad_anterior(wb, cortes_correlatividad or [])
 
