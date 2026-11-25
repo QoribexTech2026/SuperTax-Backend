@@ -38,8 +38,11 @@ def db_session():
         pytest.skip("Postgres no disponible")
 
     with engine.begin() as setup:
-        setup.execute(text("CREATE SCHEMA IF NOT EXISTS core"))
-        setup.execute(text("CREATE SCHEMA IF NOT EXISTS sire"))
+        # Crea todos los schemas que declaran los modelos (core, sire, sunat,
+        # scanner, datafilter, correos…) antes que las tablas. Se derivan del
+        # metadata para no mantener una lista a mano cada vez que se suma un módulo.
+        for esquema in sorted({t.schema for t in Base.metadata.tables.values() if t.schema}):
+            setup.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{esquema}"'))
     Base.metadata.create_all(engine, checkfirst=True)
 
     transaction = connection.begin()
