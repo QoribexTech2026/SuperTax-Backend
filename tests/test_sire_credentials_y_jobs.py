@@ -132,7 +132,13 @@ def test_crear_job_guarda_archivo_y_queda_en_cola(db_session, tmp_path):
     body = resp.json()
     assert body["status"] == "en_cola"
     assert body["empresa_filename"] == "empresa.csv"
-    assert storage.exists(f"sire/uploads/{empresa.id}/{body['id']}/empresa.csv")
+    # La ruta de storage usa un uuid (no el id del job) para evitar la race
+    # condition al subir antes de insertar; se verifica contra la ruta real.
+    from src.modules.sire.infrastructure.models import ReconciliationJobModel
+    job = db_session.get(ReconciliationJobModel, body["id"])
+    assert job.empresa_file_path.startswith(f"sire/uploads/{empresa.id}/")
+    assert job.empresa_file_path.endswith("/empresa.csv")
+    assert storage.exists(job.empresa_file_path)
 
 
 def test_crear_job_periodo_invalido_da_400(db_session, tmp_path):

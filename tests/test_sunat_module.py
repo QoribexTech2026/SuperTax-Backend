@@ -239,7 +239,10 @@ def test_iniciar_encola_job_cifrando_config(db_session):
             "/api/sunat/iniciar",
             headers={"X-Company-Id": str(empresa.id)},
             data={"ruc": "20700000001", "usuario": "U", "clave": "claveSOL"},
-            files={"excel": ("libro.xlsx", b"PK-fake-xlsx", "application/octet-stream")},
+            files={"excel": ("libro.xlsx", _xlsx([
+                ["Serie", "Numero", "RUC Emisor", "Tipo Comprobante"],
+                ["F001", 173, "20100070970", "Factura"],
+            ]), "application/octet-stream")},
         )
     finally:
         app.dependency_overrides.clear()
