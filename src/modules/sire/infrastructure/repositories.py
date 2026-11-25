@@ -1,7 +1,7 @@
 """Repositorios SQLAlchemy del módulo SIRE (schema `sire`)."""
 from datetime import datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import Session
 
 from src.modules.sire.domain.entities import (
@@ -11,9 +11,11 @@ from src.modules.sire.domain.entities import (
 )
 from src.modules.sire.infrastructure.models import (
     CompanyFileMappingModel,
+    PeriodClaveModel,
     ReconciliationJobModel,
     ReconciliationResultModel,
     ReportFileModel,
+    SerieMaxModel,
     SireCredentialsModel,
 )
 from src.platform.database.base import utcnow
@@ -80,6 +82,77 @@ class SqlReconciliationRepository:
         self._db.commit()
         self._db.refresh(row)
         return self._to_entity(row)
+
+    def upsert_period_index(
+        self,
+        company_id: int,
+        tipo_libro: str,
+        periodo: str,
+        claves: list,
+        serie_max: list,
+    ) -> None:
+        """Reemplaza de forma idempotente el índice de un periodo (Opción C):
+        borra lo anterior de ese (empresa, libro, periodo) e inserta lo nuevo, en
+        una sola transacción. Re-conciliar un mes deja el índice consistente.
+
+        - `claves`: iterable de (tipo, serie, numero) — tipos != 03.
+        - `serie_max`: iterable de (tipo, serie, numero_max)."""
+        filtro_clave = (
+            PeriodClaveModel.company_id == company_id,
+            PeriodClaveModel.tipo_libro == tipo_libro,
+            PeriodClaveModel.periodo == periodo,
+        )
+        filtro_serie = (
+            SerieMaxModel.company_id == company_id,
+            SerieMaxModel.tipo_libro == tipo_libro,
+            SerieMaxModel.periodo == periodo,
+        )
+        try:
+            self._db.execute(delete(PeriodClaveModel).where(*filtro_clave))
+            self._db.execute(delete(SerieMaxModel).where(*filtro_serie))
+            if claves:
+                self._db.execute(
+                    insert(PeriodClaveModel),
+                    [
+                        {
+                            "company_id": company_id, "tipo_libro": tipo_libro,
+                            "periodo": periodo, "tipo": tipo, "serie": serie,
+                            "numero": numero,
+                        }
+                        for tipo, serie, numero in claves
+                    ],
+                )
+            if serie_max:
+                self._db.execute(
+                    insert(SerieMaxModel),
+                    [
+                        {
+                            "company_id": company_id, "tipo_libro": tipo_libro,
+                            "periodo": periodo, "tipo": tipo, "serie": serie,
+                            "numero_max": int(numero_max),
+                        }
+                        for tipo, serie, numero_max in serie_max
+                    ],
+                )
+            self._db.commit()
+        except Exception:
+            self._db.rollback()  # deja la sesión limpia para el que la reutilice
+            raise
+
+    def periodos_con_indice(self, company_id: int, tipo_libro: str) -> list[str]:
+        """Periodos (AAAAMM) con índice guardado para la empresa. Permite detectar
+        meses faltantes en el historial automático (señal de la Fase 1)."""
+        return list(
+            self._db.scalars(
+                select(PeriodClaveModel.periodo)
+                .where(
+                    PeriodClaveModel.company_id == company_id,
+                    PeriodClaveModel.tipo_libro == tipo_libro,
+                )
+                .distinct()
+                .order_by(PeriodClaveModel.periodo)
+            )
+        )
 
     def buscar_ticket_fresco(
         self,

@@ -298,6 +298,39 @@ class _JobSnapshot:
     extra_tickets: dict[str, str]
 
 
+def _persistir_indice(
+    repo: SqlReconciliationRepository, snap: "_JobSnapshot",
+    tipo_libro: TipoLibro, result: dict,
+) -> None:
+    """Opción C (historial automático): guarda el índice del periodo que calculó el
+    worker (claves + último nº por serie), para que las próximas conciliaciones
+    crucen la duplicidad/correlatividad contra meses anteriores SIN re-subir los PLE.
+
+    Solo ventas, y secundario a la conciliación: si falla NO tumba el job; se registra
+    un aviso claro con company_id y periodo (sin datos sensibles) y el próximo run lo
+    reescribe. El historial guardado siempre es consultable (`periodos_con_indice`),
+    así que un mes faltante es detectable."""
+    indice = result.get("indice_periodo")
+    if tipo_libro != TipoLibro.ventas or not indice:
+        return
+    try:
+        repo.upsert_period_index(
+            snap.company_id, tipo_libro.value, snap.periodo,
+            indice["claves"], indice["serie_max"],
+        )
+        logger.info(
+            "Índice de periodo guardado (company=%s periodo=%s claves=%s series=%s)",
+            snap.company_id, snap.periodo,
+            len(indice["claves"]), len(indice["serie_max"]),
+        )
+    except Exception:
+        logger.warning(
+            "No se pudo guardar el índice de periodo (company=%s periodo=%s); el "
+            "historial automático quedará sin este mes hasta re-conciliar",
+            snap.company_id, snap.periodo, exc_info=True,
+        )
+
+
 async def procesar_job(db: Session, job_id: int) -> None:
     repo = SqlReconciliationRepository(db)
 
@@ -484,6 +517,7 @@ async def procesar_job(db: Session, job_id: int) -> None:
         # subproceso efímero que muere al terminar, liberando su RAM al SO.
         result = await _en_subproceso(procesar_conciliacion, payload)
         repo.save_success(job_id, result)
+        _persistir_indice(repo, snap, tipo_libro, result)
     except Exception as exc:  # se registra y se refleja como error en el job
         db.rollback()  # descarta cualquier transacción rota antes de reescribir el job
         logger.exception("Job de conciliación #%s falló", job_id)

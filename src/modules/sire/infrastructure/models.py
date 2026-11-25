@@ -8,11 +8,13 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Date,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -167,6 +169,67 @@ class CompanyFileMappingModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class PeriodClaveModel(Base):
+    """
+    Índice de claves (tipo+serie+número) declaradas por una empresa en un periodo
+    (Opción C: historial automático). Alimenta la DUPLICIDAD contra meses anteriores
+    sin que el usuario re-suba los PLE: cada conciliación persiste su índice y las
+    siguientes cruzan contra él en SQL.
+
+    Excluye boletas (03), que no entran en la duplicidad cruzada. Dato mínimo
+    (solo el número de comprobante), derivado del PLE conciliado — sin PII.
+    """
+
+    __tablename__ = "period_clave"
+    __table_args__ = (
+        # Cruce de duplicidad: dada una clave del mes, hallar periodos previos.
+        Index(
+            "ix_period_clave_lookup",
+            "company_id", "tipo_libro", "tipo", "serie", "numero", "periodo",
+        ),
+        # UPSERT idempotente y listado de periodos con historial.
+        Index("ix_period_clave_periodo", "company_id", "tipo_libro", "periodo"),
+        {"schema": "sire"},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("core.companies.id", ondelete="CASCADE")
+    )
+    tipo_libro: Mapped[str] = mapped_column(String(10))
+    periodo: Mapped[str] = mapped_column(String(6))
+    tipo: Mapped[str] = mapped_column(String(2))
+    serie: Mapped[str] = mapped_column(String(20))
+    numero: Mapped[str] = mapped_column(String(20))
+
+
+class SerieMaxModel(Base):
+    """
+    Último número declarado por serie en cada periodo (incluye 01/03/07, usando el
+    número final del rango). Alimenta la CORRELATIVIDAD contra el mes previo de la
+    Opción C: por serie, se toma el mayor periodo anterior disponible.
+    """
+
+    __tablename__ = "serie_max"
+    __table_args__ = (
+        Index(
+            "ix_serie_max_lookup",
+            "company_id", "tipo_libro", "tipo", "serie", "periodo",
+        ),
+        {"schema": "sire"},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("core.companies.id", ondelete="CASCADE")
+    )
+    tipo_libro: Mapped[str] = mapped_column(String(10))
+    periodo: Mapped[str] = mapped_column(String(6))
+    tipo: Mapped[str] = mapped_column(String(2))
+    serie: Mapped[str] = mapped_column(String(20))
+    numero_max: Mapped[int] = mapped_column(BigInteger)
 
 
 class TipoCambioModel(Base):

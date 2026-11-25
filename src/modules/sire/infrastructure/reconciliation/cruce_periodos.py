@@ -43,8 +43,16 @@ class CorteSerie:
     cantidad: int
 
 
+def normalizar_clave(tipo: str, serie: str, numero: str) -> Clave:
+    """Clave canónica de un comprobante: (tipo, serie en mayúsculas, número sin
+    ceros a la izquierda). ÚNICA fuente de normalización — la usan tanto el cruce
+    en memoria (`_clave`) como el índice persistido (Opción C), para que una clave
+    sea idéntica carácter a carácter entre Python y SQL."""
+    return (tipo.strip(), serie.strip().upper(), numero.strip().lstrip("0") or "0")
+
+
 def _clave(fila: FilaPLE) -> Clave:
-    return (fila.tipo, fila.serie, fila.numero.lstrip("0") or "0")
+    return normalizar_clave(fila.tipo, fila.serie, fila.numero)
 
 
 def _a_entero(numero: str) -> int | None:

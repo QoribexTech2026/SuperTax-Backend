@@ -21,6 +21,7 @@ from src.modules.sire.infrastructure.parser.mapeo import parse_con_columnas, val
 from src.modules.sire.infrastructure.parser.sunat_propuesta import parse_sunat_propuesta
 from src.modules.sire.infrastructure.reconciliation import cruce_periodos as cruce
 from src.modules.sire.infrastructure.reconciliation.engine import reconcile
+from src.modules.sire.infrastructure.reconciliation.period_index import construir_indice
 from src.modules.sire.infrastructure.reconciliation.ple_ventas import parse_ple_ventas
 from src.modules.sire.infrastructure.reconciliation.tc_diferencias import comparar_tipo_cambio
 from src.modules.sire.infrastructure.sunat import validez as validez_sunat
@@ -208,9 +209,13 @@ def procesar_conciliacion(payload: dict) -> dict:
     duplicados_anterior: list = []
     periodos_previos_anterior: list = []
     cortes_correlatividad: list = []
+    indice_periodo: dict | None = None  # Opción C: índice del mes para persistir
     if tipo_libro == "ventas":
         filas_actual = parse_ple_ventas(contenido)
         if filas_actual:
+            # Índice del periodo (claves + último nº por serie) para el historial
+            # automático; lo persiste el proceso principal tras guardar el job.
+            indice_periodo = construir_indice(filas_actual)
             duplicados_periodo = cruce.duplicados_en_periodo(filas_actual)
             filas_prev_por_mes: list = []
             for prev_path in payload.get("empresa_prev_file_paths") or []:
@@ -319,4 +324,5 @@ def procesar_conciliacion(payload: dict) -> dict:
         "path_csv":   csv_out["B"][0], "csv_b_size": csv_out["B"][1],
         "path_csv_c": csv_out["C"][0], "csv_c_size": csv_out["C"][1],
         "path_csv_d": csv_out["D"][0], "csv_d_size": csv_out["D"][1],
+        "indice_periodo": indice_periodo,  # Opción C: lo persiste el orchestrator
     }
